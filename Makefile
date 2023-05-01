@@ -1,17 +1,20 @@
 CONTAINER_NAME = mongodb
-MONGODB_VERSION = 4.4.6
+MONGODB_VERSION = 5.0.17
 MONGODB_PORT = 27017
+
+COMMIT_HASH := $(shell git rev-parse --short HEAD)
+LDFLAGS := -X 'main.commit=${COMMIT_HASH}'
 
 init:
 	asdf install
-	mkdir -p ./mongo/data ./mongo/log
+	mkdir -p ./mongo_data/data ./mongo_data/log
 
 up:
 	docker run -d \
 		--name $(CONTAINER_NAME) \
 		-p $(MONGODB_PORT):$(MONGODB_PORT) \
-		-v "$(shell pwd)/mongo/data/:/data/mongodb" \
-		-v "$(shell pwd)/mongo/log:/var/log" \
+		-v "$(shell pwd)/mongo_data/data/:/data/mongodb" \
+		-v "$(shell pwd)/mongo_data/log:/var/log" \
 		mongo:$(MONGODB_VERSION) \
 		mongod \
 		--dbpath /data/mongodb \
@@ -21,6 +24,7 @@ up:
 
 down:
 	docker stop $(CONTAINER_NAME)
+	docker rm $(CONTAINER_NAME)
 
 logs:
 	docker logs $(CONTAINER_NAME)
@@ -34,9 +38,12 @@ fmt:
 tidy:
 	go mod tidy
 
+update:
+	go get -u ./...
+
 install:
-	go install ./...
+	go install -ldflags "$(LDFLAGS)"
 
 test: up
-	go test ./...
+	go test -v -cover ./...
 
