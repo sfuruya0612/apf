@@ -15,7 +15,7 @@ const dbName = "aws_price_list"
 func Connect(mongoUri string) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(mongoUri)
 
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
 		return &mongo.Client{}, err
 	}
@@ -24,7 +24,7 @@ func Connect(mongoUri string) (*mongo.Client, error) {
 }
 
 func Disconnect(client *mongo.Client) error {
-	return client.Disconnect(context.TODO())
+	return client.Disconnect(context.Background())
 }
 
 func Collection(client *mongo.Client, collName string) *mongo.Collection {
@@ -42,14 +42,14 @@ func DropCollection(coll *mongo.Collection, ctx context.Context) error {
 }
 
 func Find(coll *mongo.Collection, filter interface{}, opt *options.FindOptions) ([]primitive.M, error) {
-	cursor, err := coll.Find(context.TODO(), filter, opt)
+	cursor, err := coll.Find(context.Background(), filter, opt)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer cursor.Close(context.Background())
 
 	var results []bson.M
-	if err := cursor.All(context.TODO(), &results); err != nil {
+	if err := cursor.All(context.Background(), &results); err != nil {
 		return nil, err
 	}
 

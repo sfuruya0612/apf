@@ -13,8 +13,7 @@ import (
 )
 
 var (
-	// serviceCodes = []string{"AmazonEC2", "AmazonRDS", "AmazonElastiCache"}
-	serviceCodes = []string{"AmazonRDS", "AmazonElastiCache"}
+	serviceCodes = []string{"AmazonEC2", "AmazonRDS", "AmazonElastiCache"}
 	// skuOfferTermCode := fmt.Sprintf("%s.%s", sku, "JRTCKXETXF")
 	// skuOfferTermCodeRateCode := fmt.Sprintf("%s.%s.%s", sku, "JRTCKXETXF", "6YS6EN2CT7")
 )
@@ -50,7 +49,8 @@ func fetch(profile, region, mongoUri string) error {
 		return fmt.Errorf("Fetch: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	// It takes about 10 minutes to get EC2 price
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	errCh := make(chan error, len(serviceCodes))
@@ -89,9 +89,8 @@ func fetch(profile, region, mongoUri string) error {
 			// TODO: Bulk insert
 			var insertErr error
 			for _, product := range products {
-				log.Printf("Inserting %v product into MongoDB\n", *product)
 				if _, err := coll.InsertOne(ctx, product); err != nil {
-					insertErr = fmt.Errorf("Failed to insert %s product: %v", serviceCode, err)
+					insertErr = fmt.Errorf("Failed to insert %s product %s: %v", serviceCode, *product, err)
 					break
 				}
 			}

@@ -15,33 +15,49 @@ type Pricing struct {
 	Product struct {
 		ProductFamily string
 		Attributes    struct {
-			Memory                  string
-			Vcpu                    string
-			InstanceType            string
-			UsageType               string
-			LocationType            string
-			InstanceFamily          string
-			Engine                  string
-			RegionCode              string
-			Servicecode             string
-			CurrentGeneration       string
-			NetworkPerformance      string
-			Location                string
-			Servicename             string
-			Operation               string
-			EngineCode              string
-			InstanceTypeFamily      string
-			Storage                 string
-			NormalizationSizeFactor string
-			DatabaseEdition         string
-			PhysicalProcessor       string
-			LicenseModel            string
-			DeploymentOption        string
-			ProcessorArchitecture   string
+			Memory                      string
+			Vcpu                        string
+			InstanceType                string
+			UsageType                   string
+			LocationType                string
+			InstanceFamily              string
+			OSEngine                    string
+			RegionCode                  string
+			Servicecode                 string
+			CurrentGeneration           string
+			NetworkPerformance          string
+			Location                    string
+			Servicename                 string
+			Operation                   string
+			EngineCode                  string
+			InstanceTypeFamily          string
+			Storage                     string
+			NormalizationSizeFactor     string
+			DatabaseEdition             string
+			PhysicalProcessor           string
+			LicenseModel                string
+			DeploymentOption            string
+			ProcessorArchitecture       string
+			EnhancedNetworkingSupported string
+			IntelTurboAvailable         string
+			DedicatedEbsThroughput      string
+			Classicnetworkingsupport    string
+			Capacitystatus              string
+			IntelAvx2Available          string
+			ClockSpeed                  string
+			Ecu                         string
+			GpuMemory                   string
+			Vpcnetworkingsupport        string
+			Tenancy                     string
+			IntelAvxAvailable           string
+			ProcessorFeatures           string
+			PreInstalledSw              string
+			Marketoption                string
+			Availabilityzone            string
 		}
 	}
-	ServiceCode string
-	PricePerUSD string
+	ServiceCode         string
+	OnDemandPricePerUSD string
 }
 
 func FetchPricing(cfg aws.Config, serviceCode string) ([]*Pricing, error) {
@@ -93,12 +109,12 @@ func parsePricing(serviceCode string, pricings []*Pricing, priceList []string) (
 			return nil, err
 		}
 
+		attr := p["product"].(map[string]interface{})["attributes"].(map[string]interface{})
+
 		// If the product does not have vcpu or memory, skip it.
-		if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["vcpu"] == nil || p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["memory"] == nil {
+		if attr["vcpu"] == nil || attr["memory"] == nil {
 			continue
 		}
-
-		// TODO: Check offerTermCode and rateCode, if not match return error.
 
 		pricing := &Pricing{}
 		pricing.ServiceCode = serviceCode
@@ -109,13 +125,20 @@ func parsePricing(serviceCode string, pricings []*Pricing, priceList []string) (
 		skuOfferTermCode := fmt.Sprintf("%s.%s", sku, "JRTCKXETXF")
 		skuOfferTermCodeRateCode := fmt.Sprintf("%s.%s.%s", sku, "JRTCKXETXF", "6YS6EN2CT7")
 
-		pricing.PricePerUSD = p["terms"].(map[string]interface{})["OnDemand"].(map[string]interface{})[skuOfferTermCode].(map[string]interface{})["priceDimensions"].(map[string]interface{})[skuOfferTermCodeRateCode].(map[string]interface{})["pricePerUnit"].(map[string]interface{})["USD"].(string)
+		// OnDemand Terms has nil data.
+		if p["terms"].(map[string]interface{})["OnDemand"] == nil {
+			continue
+		}
+
+		pricing.OnDemandPricePerUSD = p["terms"].(map[string]interface{})["OnDemand"].(map[string]interface{})[skuOfferTermCode].(map[string]interface{})["priceDimensions"].(map[string]interface{})[skuOfferTermCodeRateCode].(map[string]interface{})["pricePerUnit"].(map[string]interface{})["USD"].(string)
 
 		switch serviceCode {
+		case "AmazonEC2":
+			pricing = pricing.addEc2Attributes(attr)
 		case "AmazonRDS":
-			pricing = rdsPricing(pricing, p)
+			pricing = pricing.addRdsAttributes(attr)
 		case "AmazonElastiCache":
-			pricing = elasticachePricing(pricing, p)
+			pricing = pricing.addElasticacheAttributes(attr)
 		default:
 			panic("Unknown service code")
 		}
@@ -134,7 +157,130 @@ func parseProduct(price string) (map[string]interface{}, error) {
 	return product, nil
 }
 
-// Example:
+// product example:
+//
+//	"product": {
+//	  "productFamily": "Compute Instance",
+//	  "attributes": {
+//	    "enhancedNetworkingSupported": "Yes",
+//	    "intelTurboAvailable": "Yes",
+//	    "memory": "4 GiB",
+//	    "dedicatedEbsThroughput": "Up to 10000 Mbps",
+//	    "vcpu": "2",
+//	    "classicnetworkingsupport": "false",
+//	    "capacitystatus": "Used",
+//	    "locationType": "AWS Region",
+//	    "storage": "EBS only",
+//	    "instanceFamily": "Compute optimized",
+//	    "operatingSystem": "Windows",
+//	    "intelAvx2Available": "Yes",
+//	    "regionCode": "ap-northeast-1",
+//	    "physicalProcessor": "Intel Xeon 8375C (Ice Lake)",
+//	    "clockSpeed": "3.5 GHz",
+//	    "ecu": "NA",
+//	    "networkPerformance": "Up to 12500 Megabit",
+//	    "servicename": "Amazon Elastic Compute Cloud",
+//	    "gpuMemory": "NA",
+//	    "vpcnetworkingsupport": "true",
+//	    "instanceType": "c6i.large",
+//	    "tenancy": "Dedicated",
+//	    "usagetype": "APN1-DedicatedUsage:c6i.large",
+//	    "normalizationSizeFactor": "4",
+//	    "intelAvxAvailable": "Yes",
+//	    "processorFeatures": "Intel AVX; Intel AVX2; Intel AVX512; Intel Turbo",
+//	    "servicecode": "AmazonEC2",
+//	    "licenseModel": "No License required",
+//	    "currentGeneration": "Yes",
+//	    "preInstalledSw": "SQL Web",
+//	    "location": "Asia Pacific (Tokyo)",
+//	    "processorArchitecture": "64-bit",
+//	    "marketoption": "OnDemand",
+//	    "operation": "RunInstances:0202",
+//	    "availabilityzone": "NA"
+//	  },
+//	  "sku": "2223B6PCG6QAUYY6"
+//	}
+func (p *Pricing) addEc2Attributes(attr map[string]interface{}) *Pricing {
+	// Forcefully accommodating differences between database engines.
+	if attr["enhancedNetworkingSupported"] == nil {
+		attr["enhancedNetworkingSupported"] = "unknown"
+	} else {
+		p.Product.Attributes.EnhancedNetworkingSupported = attr["enhancedNetworkingSupported"].(string)
+	}
+
+	if attr["intelTurboAvailable"] == nil {
+		attr["intelTurboAvailable"] = "unknown"
+	} else {
+		p.Product.Attributes.IntelTurboAvailable = attr["intelTurboAvailable"].(string)
+	}
+
+	if attr["dedicatedEbsThroughput"] == nil {
+		attr["dedicatedEbsThroughput"] = "unknown"
+	} else {
+		p.Product.Attributes.DedicatedEbsThroughput = attr["dedicatedEbsThroughput"].(string)
+	}
+
+	if attr["intelAvx2Available"] == nil {
+		attr["intelAvx2Available"] = "unknown"
+	} else {
+		p.Product.Attributes.IntelAvx2Available = attr["intelAvx2Available"].(string)
+	}
+	if attr["clockSpeed"] == nil {
+		attr["clockSpeed"] = "unknown"
+	} else {
+		p.Product.Attributes.ClockSpeed = attr["clockSpeed"].(string)
+	}
+
+	if attr["gpuMemory"] == nil {
+		attr["gpuMemory"] = "unknown"
+	} else {
+		p.Product.Attributes.GpuMemory = attr["gpuMemory"].(string)
+	}
+
+	if attr["intelAvxAvailable"] == nil {
+		attr["intelAvxAvailable"] = "unknown"
+	} else {
+		p.Product.Attributes.IntelAvxAvailable = attr["intelAvxAvailable"].(string)
+	}
+
+	if attr["processorFeatures"] == nil {
+		attr["processorFeatures"] = "unknown"
+	} else {
+		p.Product.Attributes.ProcessorFeatures = attr["processorFeatures"].(string)
+	}
+
+	p.Product.Attributes.Memory = attr["memory"].(string)
+	p.Product.Attributes.Vcpu = attr["vcpu"].(string)
+	p.Product.Attributes.Classicnetworkingsupport = attr["classicnetworkingsupport"].(string)
+	p.Product.Attributes.Capacitystatus = attr["capacitystatus"].(string)
+	p.Product.Attributes.LocationType = attr["locationType"].(string)
+	p.Product.Attributes.Storage = attr["storage"].(string)
+	p.Product.Attributes.InstanceFamily = attr["instanceFamily"].(string)
+	p.Product.Attributes.OSEngine = attr["operatingSystem"].(string)
+	p.Product.Attributes.RegionCode = attr["regionCode"].(string)
+	p.Product.Attributes.PhysicalProcessor = attr["physicalProcessor"].(string)
+	p.Product.Attributes.Ecu = attr["ecu"].(string)
+	p.Product.Attributes.NetworkPerformance = attr["networkPerformance"].(string)
+	p.Product.Attributes.Servicename = attr["servicename"].(string)
+	p.Product.Attributes.Vpcnetworkingsupport = attr["vpcnetworkingsupport"].(string)
+	p.Product.Attributes.InstanceType = attr["instanceType"].(string)
+	p.Product.Attributes.Tenancy = attr["tenancy"].(string)
+	p.Product.Attributes.UsageType = attr["usagetype"].(string)
+	p.Product.Attributes.NormalizationSizeFactor = attr["normalizationSizeFactor"].(string)
+	p.Product.Attributes.Servicecode = attr["servicecode"].(string)
+	p.Product.Attributes.LicenseModel = attr["licenseModel"].(string)
+	p.Product.Attributes.CurrentGeneration = attr["currentGeneration"].(string)
+	p.Product.Attributes.PreInstalledSw = attr["preInstalledSw"].(string)
+	p.Product.Attributes.Location = attr["location"].(string)
+	p.Product.Attributes.ProcessorArchitecture = attr["processorArchitecture"].(string)
+	p.Product.Attributes.Marketoption = attr["marketoption"].(string)
+	p.Product.Attributes.Operation = attr["operation"].(string)
+	p.Product.Attributes.Availabilityzone = attr["availabilityzone"].(string)
+
+	return p
+}
+
+// product example:
 //
 //	"product": {
 //	  "productFamily": "Database Instance",
@@ -165,66 +311,66 @@ func parseProduct(price string) (map[string]interface{}, error) {
 //	  },
 //	  "sku": "22GTWH3M7MMRFZQ9"
 //	}
-func rdsPricing(pricing *Pricing, p map[string]interface{}) *Pricing {
+func (p *Pricing) addRdsAttributes(attr map[string]interface{}) *Pricing {
 	// Forcefully accommodating differences between database engines.
-	if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["engineCode"] == nil {
-		pricing.Product.Attributes.EngineCode = "unknown"
+	if attr["engineCode"] == nil {
+		p.Product.Attributes.EngineCode = "unknown"
 	} else {
-		pricing.Product.Attributes.EngineCode = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["engineCode"].(string)
+		p.Product.Attributes.EngineCode = attr["engineCode"].(string)
 	}
 
-	if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["databaseEdition"] == nil {
-		pricing.Product.Attributes.DatabaseEdition = "unknown"
+	if attr["databaseEdition"] == nil {
+		p.Product.Attributes.DatabaseEdition = "unknown"
 	} else {
-		pricing.Product.Attributes.DatabaseEdition = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["databaseEdition"].(string)
+		p.Product.Attributes.DatabaseEdition = attr["databaseEdition"].(string)
 	}
 
-	if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["physicalProcessor"] == nil {
-		pricing.Product.Attributes.PhysicalProcessor = "unknown"
+	if attr["physicalProcessor"] == nil {
+		p.Product.Attributes.PhysicalProcessor = "unknown"
 	} else {
-		pricing.Product.Attributes.PhysicalProcessor = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["physicalProcessor"].(string)
+		p.Product.Attributes.PhysicalProcessor = attr["physicalProcessor"].(string)
 	}
 
-	if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["currentGeneration"] == nil {
-		pricing.Product.Attributes.CurrentGeneration = "unknown"
+	if attr["currentGeneration"] == nil {
+		p.Product.Attributes.CurrentGeneration = "unknown"
 	} else {
-		pricing.Product.Attributes.CurrentGeneration = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["currentGeneration"].(string)
+		p.Product.Attributes.CurrentGeneration = attr["currentGeneration"].(string)
 	}
 
-	if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["networkPerformance"] == nil {
-		pricing.Product.Attributes.NetworkPerformance = "unknown"
+	if attr["networkPerformance"] == nil {
+		p.Product.Attributes.NetworkPerformance = "unknown"
 	} else {
-		pricing.Product.Attributes.NetworkPerformance = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["networkPerformance"].(string)
+		p.Product.Attributes.NetworkPerformance = attr["networkPerformance"].(string)
 	}
 
-	if p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["processorArchitecture"] == nil {
-		pricing.Product.Attributes.ProcessorArchitecture = "unknown"
+	if attr["processorArchitecture"] == nil {
+		p.Product.Attributes.ProcessorArchitecture = "unknown"
 	} else {
-		pricing.Product.Attributes.ProcessorArchitecture = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["processorArchitecture"].(string)
+		p.Product.Attributes.ProcessorArchitecture = attr["processorArchitecture"].(string)
 	}
 
-	pricing.Product.Attributes.InstanceTypeFamily = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["instanceTypeFamily"].(string)
-	pricing.Product.Attributes.Memory = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["memory"].(string)
-	pricing.Product.Attributes.Vcpu = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["vcpu"].(string)
-	pricing.Product.Attributes.InstanceType = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["instanceType"].(string)
-	pricing.Product.Attributes.UsageType = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["usagetype"].(string)
-	pricing.Product.Attributes.LocationType = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["locationType"].(string)
-	pricing.Product.Attributes.Storage = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["storage"].(string)
-	pricing.Product.Attributes.NormalizationSizeFactor = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["normalizationSizeFactor"].(string)
-	pricing.Product.Attributes.InstanceFamily = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["instanceFamily"].(string)
-	pricing.Product.Attributes.Engine = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["databaseEngine"].(string)
-	pricing.Product.Attributes.RegionCode = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["regionCode"].(string)
-	pricing.Product.Attributes.Servicecode = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["servicecode"].(string)
-	pricing.Product.Attributes.LicenseModel = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["licenseModel"].(string)
-	pricing.Product.Attributes.DeploymentOption = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["deploymentOption"].(string)
-	pricing.Product.Attributes.Location = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["location"].(string)
-	pricing.Product.Attributes.Servicename = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["servicename"].(string)
-	pricing.Product.Attributes.Operation = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["operation"].(string)
+	p.Product.Attributes.InstanceTypeFamily = attr["instanceTypeFamily"].(string)
+	p.Product.Attributes.Memory = attr["memory"].(string)
+	p.Product.Attributes.Vcpu = attr["vcpu"].(string)
+	p.Product.Attributes.InstanceType = attr["instanceType"].(string)
+	p.Product.Attributes.UsageType = attr["usagetype"].(string)
+	p.Product.Attributes.LocationType = attr["locationType"].(string)
+	p.Product.Attributes.Storage = attr["storage"].(string)
+	p.Product.Attributes.NormalizationSizeFactor = attr["normalizationSizeFactor"].(string)
+	p.Product.Attributes.InstanceFamily = attr["instanceFamily"].(string)
+	p.Product.Attributes.OSEngine = attr["databaseEngine"].(string)
+	p.Product.Attributes.RegionCode = attr["regionCode"].(string)
+	p.Product.Attributes.Servicecode = attr["servicecode"].(string)
+	p.Product.Attributes.LicenseModel = attr["licenseModel"].(string)
+	p.Product.Attributes.DeploymentOption = attr["deploymentOption"].(string)
+	p.Product.Attributes.Location = attr["location"].(string)
+	p.Product.Attributes.Servicename = attr["servicename"].(string)
+	p.Product.Attributes.Operation = attr["operation"].(string)
 
-	return pricing
+	return p
 }
 
-// Example:
+// product example:
 //
 //	"product": {
 //	  "productFamily": "Cache Instance",
@@ -246,21 +392,21 @@ func rdsPricing(pricing *Pricing, p map[string]interface{}) *Pricing {
 //	  },
 //	  "sku": "223SCNAF37X3F5SU"
 //	}
-func elasticachePricing(pricing *Pricing, p map[string]interface{}) *Pricing {
-	pricing.Product.Attributes.Memory = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["memory"].(string)
-	pricing.Product.Attributes.Vcpu = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["vcpu"].(string)
-	pricing.Product.Attributes.InstanceType = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["instanceType"].(string)
-	pricing.Product.Attributes.UsageType = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["usagetype"].(string)
-	pricing.Product.Attributes.LocationType = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["locationType"].(string)
-	pricing.Product.Attributes.InstanceFamily = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["instanceFamily"].(string)
-	pricing.Product.Attributes.Engine = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["cacheEngine"].(string)
-	pricing.Product.Attributes.RegionCode = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["regionCode"].(string)
-	pricing.Product.Attributes.Servicecode = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["servicecode"].(string)
-	pricing.Product.Attributes.CurrentGeneration = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["currentGeneration"].(string)
-	pricing.Product.Attributes.NetworkPerformance = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["networkPerformance"].(string)
-	pricing.Product.Attributes.Location = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["location"].(string)
-	pricing.Product.Attributes.Servicename = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["servicename"].(string)
-	pricing.Product.Attributes.Operation = p["product"].(map[string]interface{})["attributes"].(map[string]interface{})["operation"].(string)
+func (p *Pricing) addElasticacheAttributes(attr map[string]interface{}) *Pricing {
+	p.Product.Attributes.Memory = attr["memory"].(string)
+	p.Product.Attributes.Vcpu = attr["vcpu"].(string)
+	p.Product.Attributes.InstanceType = attr["instanceType"].(string)
+	p.Product.Attributes.UsageType = attr["usagetype"].(string)
+	p.Product.Attributes.LocationType = attr["locationType"].(string)
+	p.Product.Attributes.InstanceFamily = attr["instanceFamily"].(string)
+	p.Product.Attributes.OSEngine = attr["cacheEngine"].(string)
+	p.Product.Attributes.RegionCode = attr["regionCode"].(string)
+	p.Product.Attributes.Servicecode = attr["servicecode"].(string)
+	p.Product.Attributes.CurrentGeneration = attr["currentGeneration"].(string)
+	p.Product.Attributes.NetworkPerformance = attr["networkPerformance"].(string)
+	p.Product.Attributes.Location = attr["location"].(string)
+	p.Product.Attributes.Servicename = attr["servicename"].(string)
+	p.Product.Attributes.Operation = attr["operation"].(string)
 
-	return pricing
+	return p
 }
