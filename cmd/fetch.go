@@ -49,8 +49,8 @@ func fetch(profile, region, mongoUri string) error {
 		return fmt.Errorf("Fetch: %v", err)
 	}
 
-	// It takes about 10 minutes to get EC2 price
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	// It takes about 20 minutes to get and insert EC2 price
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	errCh := make(chan error, len(serviceCodes))
