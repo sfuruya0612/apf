@@ -93,8 +93,8 @@ func printResults(results []bson.M) error {
 func format(result primitive.M) string {
 	fields := []string{
 		result["servicecode"].(string),
-		result["product"].(bson.M)["attributes"].(bson.M)["engine"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["regioncode"].(string),
+		result["product"].(bson.M)["attributes"].(bson.M)["engine"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["instancetype"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["vcpu"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["memory"].(string),

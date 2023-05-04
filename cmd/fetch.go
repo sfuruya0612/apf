@@ -14,7 +14,9 @@ import (
 
 var (
 	// serviceCodes = []string{"AmazonEC2", "AmazonRDS", "AmazonElastiCache"}
-	serviceCodes = []string{"AmazonElastiCache"}
+	serviceCodes = []string{"AmazonRDS", "AmazonElastiCache"}
+	// skuOfferTermCode := fmt.Sprintf("%s.%s", sku, "JRTCKXETXF")
+	// skuOfferTermCodeRateCode := fmt.Sprintf("%s.%s.%s", sku, "JRTCKXETXF", "6YS6EN2CT7")
 )
 
 var FetchCommand = &cli.Command{
@@ -69,8 +71,6 @@ func fetch(profile, region, mongoUri string) error {
 				return
 			}
 
-			log.Printf("Inserting %d %s products into MongoDB\n", len(products), serviceCode)
-
 			conn, err := mongo.Connect(mongoUri)
 			if err != nil {
 				errCh <- fmt.Errorf("Failed to connect to MongoDB: %v", err)
@@ -83,6 +83,8 @@ func fetch(profile, region, mongoUri string) error {
 				errCh <- fmt.Errorf("Failed to remove %s collection: %v", serviceCode, err)
 				return
 			}
+
+			log.Printf("Inserting %d %s products into MongoDB\n", len(products), serviceCode)
 
 			// TODO: Bulk insert
 			var insertErr error

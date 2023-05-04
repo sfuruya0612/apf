@@ -1,5 +1,5 @@
 CONTAINER_NAME = mongodb
-MONGODB_VERSION = 5.0.17
+MONGODB_VERSION = 6.0.5
 MONGODB_PORT = 27017
 
 COMMIT_HASH := $(shell git rev-parse --short HEAD)
