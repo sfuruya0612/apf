@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/pricing/types"
 )
 
-type Pricing struct {
+type Price struct {
 	Product struct {
 		ProductFamily string
 		Attributes    struct {
@@ -60,7 +60,7 @@ type Pricing struct {
 	OnDemandPricePerUSD string
 }
 
-func FetchPricing(cfg aws.Config, serviceCode string) ([]*Pricing, error) {
+func GetProducts(cfg aws.Config, serviceCode string) ([]*Price, error) {
 	log.Printf("Fetching %s products from AWS Price List API\n", serviceCode)
 
 	client := pricing.NewFromConfig(cfg)
@@ -84,7 +84,7 @@ func FetchPricing(cfg aws.Config, serviceCode string) ([]*Pricing, error) {
 
 	paginator := pricing.NewGetProductsPaginator(client, input)
 
-	var p []*Pricing
+	var p []*Price
 
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(context.Background())
@@ -102,9 +102,9 @@ func FetchPricing(cfg aws.Config, serviceCode string) ([]*Pricing, error) {
 	return p, nil
 }
 
-func parsePricing(serviceCode string, pricings []*Pricing, priceList []string) ([]*Pricing, error) {
-	for _, price := range priceList {
-		p, err := parseProduct(price)
+func parsePricing(serviceCode string, prices []*Price, priceList []string) ([]*Price, error) {
+	for _, plist := range priceList {
+		p, err := parseProduct(plist)
 		if err != nil {
 			return nil, err
 		}
@@ -116,9 +116,9 @@ func parsePricing(serviceCode string, pricings []*Pricing, priceList []string) (
 			continue
 		}
 
-		pricing := &Pricing{}
-		pricing.ServiceCode = serviceCode
-		pricing.Product.ProductFamily = p["product"].(map[string]interface{})["productFamily"].(string)
+		price := &Price{}
+		price.ServiceCode = serviceCode
+		price.Product.ProductFamily = p["product"].(map[string]interface{})["productFamily"].(string)
 
 		// TODO: Looking for a better way to get the price.
 		sku := p["product"].(map[string]interface{})["sku"].(string)
@@ -130,23 +130,23 @@ func parsePricing(serviceCode string, pricings []*Pricing, priceList []string) (
 			continue
 		}
 
-		pricing.OnDemandPricePerUSD = p["terms"].(map[string]interface{})["OnDemand"].(map[string]interface{})[skuOfferTermCode].(map[string]interface{})["priceDimensions"].(map[string]interface{})[skuOfferTermCodeRateCode].(map[string]interface{})["pricePerUnit"].(map[string]interface{})["USD"].(string)
+		price.OnDemandPricePerUSD = p["terms"].(map[string]interface{})["OnDemand"].(map[string]interface{})[skuOfferTermCode].(map[string]interface{})["priceDimensions"].(map[string]interface{})[skuOfferTermCodeRateCode].(map[string]interface{})["pricePerUnit"].(map[string]interface{})["USD"].(string)
 
 		switch serviceCode {
 		case "AmazonEC2":
-			pricing = pricing.addEc2Attributes(attr)
+			price = price.addEc2Attributes(attr)
 		case "AmazonRDS":
-			pricing = pricing.addRdsAttributes(attr)
+			price = price.addRdsAttributes(attr)
 		case "AmazonElastiCache":
-			pricing = pricing.addElasticacheAttributes(attr)
+			price = price.addElasticacheAttributes(attr)
 		default:
 			panic("Unknown service code")
 		}
 
-		pricings = append(pricings, pricing)
+		prices = append(prices, price)
 	}
 
-	return pricings, nil
+	return prices, nil
 }
 
 func parseProduct(price string) (map[string]interface{}, error) {
@@ -200,7 +200,7 @@ func parseProduct(price string) (map[string]interface{}, error) {
 //	  },
 //	  "sku": "2223B6PCG6QAUYY6"
 //	}
-func (p *Pricing) addEc2Attributes(attr map[string]interface{}) *Pricing {
+func (p *Price) addEc2Attributes(attr map[string]interface{}) *Price {
 	// Forcefully accommodating differences between database engines.
 	if attr["enhancedNetworkingSupported"] == nil {
 		attr["enhancedNetworkingSupported"] = "unknown"
@@ -311,7 +311,7 @@ func (p *Pricing) addEc2Attributes(attr map[string]interface{}) *Pricing {
 //	  },
 //	  "sku": "22GTWH3M7MMRFZQ9"
 //	}
-func (p *Pricing) addRdsAttributes(attr map[string]interface{}) *Pricing {
+func (p *Price) addRdsAttributes(attr map[string]interface{}) *Price {
 	// Forcefully accommodating differences between database engines.
 	if attr["engineCode"] == nil {
 		p.Product.Attributes.EngineCode = "unknown"
@@ -392,7 +392,7 @@ func (p *Pricing) addRdsAttributes(attr map[string]interface{}) *Pricing {
 //	  },
 //	  "sku": "223SCNAF37X3F5SU"
 //	}
-func (p *Pricing) addElasticacheAttributes(attr map[string]interface{}) *Pricing {
+func (p *Price) addElasticacheAttributes(attr map[string]interface{}) *Price {
 	p.Product.Attributes.Memory = attr["memory"].(string)
 	p.Product.Attributes.Vcpu = attr["vcpu"].(string)
 	p.Product.Attributes.InstanceType = attr["instanceType"].(string)

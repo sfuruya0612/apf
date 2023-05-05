@@ -65,7 +65,7 @@ func fetch(profile, region, mongoUri string) error {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			products, err := aws.FetchPricing(cfg, serviceCode)
+			products, err := aws.GetProducts(cfg, serviceCode)
 			if err != nil {
 				errCh <- fmt.Errorf("Failed to fetch %s products: %v", serviceCode, err)
 				return
