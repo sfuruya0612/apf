@@ -14,7 +14,7 @@ func Config(profile, region string) (aws.Config, error) {
 		config.WithRegion(region),
 	)
 	if err != nil {
-		return aws.Config{}, fmt.Errorf("Failed to load AWS config: %v", err)
+		return aws.Config{}, fmt.Errorf("Failed to load AWS config: %w", err)
 	}
 
 	return cfg, nil

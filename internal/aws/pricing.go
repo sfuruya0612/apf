@@ -89,12 +89,12 @@ func GetProducts(cfg aws.Config, serviceCode string) ([]*Price, error) {
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(context.Background())
 		if err != nil {
-			return nil, fmt.Errorf("Failed to get products: %v", err)
+			return nil, fmt.Errorf("Failed to get products: %w", err)
 		}
 
 		p, err = parsePricing(serviceCode, p, output.PriceList)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse products: %v", err)
+			return nil, fmt.Errorf("Failed to parse products: %w", err)
 		}
 
 	}

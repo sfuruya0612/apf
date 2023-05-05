@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 
@@ -38,11 +39,6 @@ func main() {
 	app.Commands = Commands
 
 	if err := app.Run(os.Args); err != nil {
-		code := 1
-		if c, ok := err.(cli.ExitCoder); ok {
-			code = c.ExitCode()
-		}
-		fmt.Printf("\x1b[31mERROR: %v\x1b[0m", err.Error())
-		os.Exit(code)
+		log.Fatal(err)
 	}
 }

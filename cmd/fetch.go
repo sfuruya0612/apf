@@ -46,7 +46,7 @@ var FetchCommand = &cli.Command{
 func fetch(profile, region, mongoUri string) error {
 	cfg, err := aws.Config(profile, region)
 	if err != nil {
-		return fmt.Errorf("Fetch: %v", err)
+		return fmt.Errorf("Fetch: %w", err)
 	}
 
 	// It takes about 20 minutes to get and insert EC2 price
@@ -67,20 +67,20 @@ func fetch(profile, region, mongoUri string) error {
 
 			products, err := aws.GetProducts(cfg, serviceCode)
 			if err != nil {
-				errCh <- fmt.Errorf("Failed to fetch %s products: %v", serviceCode, err)
+				errCh <- fmt.Errorf("Failed to fetch %s products: %w", serviceCode, err)
 				return
 			}
 
 			conn, err := mongo.Connect(mongoUri)
 			if err != nil {
-				errCh <- fmt.Errorf("Failed to connect to MongoDB: %v", err)
+				errCh <- fmt.Errorf("Failed to connect to MongoDB: %w", err)
 				return
 			}
 
 			coll := mongo.Collection(conn, getCollectionName(serviceCode))
 
 			if err := mongo.DropCollection(coll, nil); err != nil {
-				errCh <- fmt.Errorf("Failed to remove %s collection: %v", serviceCode, err)
+				errCh <- fmt.Errorf("Failed to remove %s collection: %w", serviceCode, err)
 				return
 			}
 
@@ -90,7 +90,7 @@ func fetch(profile, region, mongoUri string) error {
 			var insertErr error
 			for _, product := range products {
 				if _, err := coll.InsertOne(ctx, product); err != nil {
-					insertErr = fmt.Errorf("Failed to insert %s product %s: %v", serviceCode, *product, err)
+					insertErr = fmt.Errorf("Failed to insert %s product %s: %w", serviceCode, *product, err)
 					break
 				}
 			}
@@ -101,7 +101,7 @@ func fetch(profile, region, mongoUri string) error {
 			}
 
 			if err := mongo.Disconnect(conn); err != nil {
-				errCh <- fmt.Errorf("Failed to disconnect to MongoDB: %v", err)
+				errCh <- fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
 				return
 			}
 
