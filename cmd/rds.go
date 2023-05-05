@@ -18,12 +18,6 @@ var rdsCommand = &cli.Command{
 	Usage: "Get RDS pricing",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:     "instance-type",
-			Aliases:  []string{"i"},
-			Usage:    "Specify a valid instance type",
-			Required: true,
-		},
-		&cli.StringFlag{
 			Name:    "engine",
 			Aliases: []string{"e"},
 			Value:   "Aurora MySQL",
@@ -37,11 +31,11 @@ var rdsCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return getRdsPrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("engine"), ctx.String("deployment-option"))
+		return getRdsPrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("vcpu"), ctx.String("memory"), ctx.String("engine"), ctx.String("deployment-option"))
 	},
 }
 
-func getRdsPrice(mongoUri, instanceType, engine, deploymentOption string) error {
+func getRdsPrice(mongoUri, instanceType, vcpu, memory, engine, deploymentOption string) error {
 	conn, err := mongo.Connect(mongoUri)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
@@ -49,7 +43,9 @@ func getRdsPrice(mongoUri, instanceType, engine, deploymentOption string) error 
 
 	coll := mongo.Collection(conn, "rds")
 
-	filter := bson.M{"product.attributes.instancetype": instanceType, "product.attributes.osengine": engine, "product.attributes.deploymentoption": deploymentOption}
+	filter := bson.M{"product.attributes.osengine": engine, "product.attributes.deploymentoption": deploymentOption}
+
+	filter = appendCondition(filter, instanceType, vcpu, memory)
 
 	results, err := mongo.Find(coll, filter, nil)
 	if err != nil {

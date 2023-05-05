@@ -19,12 +19,6 @@ var elasticacheCommand = &cli.Command{
 	Usage:   "Get Elasticache pricing",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:     "instance-type",
-			Aliases:  []string{"i"},
-			Usage:    "Specify a valid instance type",
-			Required: true,
-		},
-		&cli.StringFlag{
 			Name:    "engine",
 			Aliases: []string{"e"},
 			Value:   "Redis",
@@ -32,11 +26,11 @@ var elasticacheCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return getElasticachePrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("engine"))
+		return getElasticachePrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("vcpu"), ctx.String("memory"), ctx.String("engine"))
 	},
 }
 
-func getElasticachePrice(mongoUri, instanceType, engine string) error {
+func getElasticachePrice(mongoUri, instanceType, vcpu, memory, engine string) error {
 	conn, err := mongo.Connect(mongoUri)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
@@ -44,7 +38,9 @@ func getElasticachePrice(mongoUri, instanceType, engine string) error {
 
 	coll := mongo.Collection(conn, "elasticache")
 
-	filter := bson.M{"product.attributes.instancetype": instanceType, "product.attributes.osengine": engine}
+	filter := bson.M{"product.attributes.osengine": engine}
+
+	filter = appendCondition(filter, instanceType, vcpu, memory)
 
 	results, err := mongo.Find(coll, filter, nil)
 	if err != nil {

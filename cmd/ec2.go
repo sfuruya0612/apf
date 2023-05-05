@@ -18,12 +18,6 @@ var ec2Command = &cli.Command{
 	Usage: "Get EC2 pricing",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:     "instance-type",
-			Aliases:  []string{"i"},
-			Usage:    "Specify a valid instance type",
-			Required: true,
-		},
-		&cli.StringFlag{
 			Name:    "os",
 			Aliases: []string{"o"},
 			Value:   "Linux",
@@ -49,11 +43,11 @@ var ec2Command = &cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return getEc2Price(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("os"), ctx.String("tenancy"), ctx.String("capacitystatus"), ctx.String("preinstalled-sw"))
+		return getEc2Price(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("vcpu"), ctx.String("memory"), ctx.String("os"), ctx.String("tenancy"), ctx.String("capacitystatus"), ctx.String("preinstalled-sw"))
 	},
 }
 
-func getEc2Price(mongoUri, instanceType, os, tenancy, capacitystatus, preInstalledSw string) error {
+func getEc2Price(mongoUri, instanceType, vcpu, memory, os, tenancy, capacitystatus, preInstalledSw string) error {
 	conn, err := mongo.Connect(mongoUri)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
@@ -61,7 +55,9 @@ func getEc2Price(mongoUri, instanceType, os, tenancy, capacitystatus, preInstall
 
 	coll := mongo.Collection(conn, "ec2")
 
-	filter := bson.M{"product.attributes.instancetype": instanceType, "product.attributes.osengine": os, "product.attributes.tenancy": tenancy, "product.attributes.capacitystatus": capacitystatus, "product.attributes.preinstalledsw": preInstalledSw}
+	filter := bson.M{"product.attributes.osengine": os, "product.attributes.tenancy": tenancy, "product.attributes.capacitystatus": capacitystatus, "product.attributes.preinstalledsw": preInstalledSw}
+
+	filter = appendCondition(filter, instanceType, vcpu, memory)
 
 	results, err := mongo.Find(coll, filter, nil)
 	if err != nil {
