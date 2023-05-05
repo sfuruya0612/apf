@@ -15,7 +15,7 @@ var (
 
 var Commands = []*cli.Command{
 	cmd.FetchCommand,
-	cmd.FindCommand,
+	cmd.PriceCommand,
 }
 
 func main() {

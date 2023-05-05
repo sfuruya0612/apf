@@ -7,52 +7,51 @@ import (
 	"text/tabwriter"
 
 	"github.com/sfuruya0612/apf/internal/mongo"
+	"github.com/sfuruya0612/apf/internal/utils"
 	"github.com/urfave/cli/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-var FindCommand = &cli.Command{
-	Name:    "get",
-	Usage:   "Get AWS pricing",
-	Aliases: []string{"g"},
+var elasticacheCommand = &cli.Command{
+	Name:    "elasticache",
+	Aliases: []string{"ec"},
+	Usage:   "Get Elasticache pricing",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:    "service",
-			Aliases: []string{"serv"},
-			EnvVars: []string{"SERVICE"},
-			Value:   "ec2",
-			Usage:   "Specify a valid AWS service name",
+			Name:     "instance-type",
+			Aliases:  []string{"i"},
+			Usage:    "Specify a valid instance type",
+			Required: true,
 		},
 		&cli.StringFlag{
-			Name:    "spec",
-			Aliases: []string{"s"},
-			EnvVars: []string{"SPEC"},
-			Value:   "t3.micro",
-			Usage:   "Specify a valid AWS service spec",
+			Name:    "engine",
+			Aliases: []string{"e"},
+			Value:   "Redis",
+			Usage:   "Specify a valid cache engine (e.g. Redis, Memcached)",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return get(ctx.String("mongo-uri"), ctx.String("service"), ctx.String("spec"))
+		return getElasticachePrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("engine"))
 	},
 }
 
-func get(mongoUri, service, spec string) error {
+func getElasticachePrice(mongoUri, instanceType, engine string) error {
 	conn, err := mongo.Connect(mongoUri)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
 	}
 
-	coll := mongo.Collection(conn, service)
+	coll := mongo.Collection(conn, "elasticache")
 
-	filter := bson.M{"product.attributes.instancetype": spec}
+	filter := bson.M{"product.attributes.instancetype": instanceType, "product.attributes.osengine": engine}
 
 	results, err := mongo.Find(coll, filter, nil)
 	if err != nil {
 		return fmt.Errorf("Failed to find: %w", err)
 	}
 
-	printResults(results)
+	printElasticache(results)
 
 	if err := mongo.Disconnect(conn); err != nil {
 		return fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
@@ -60,25 +59,15 @@ func get(mongoUri, service, spec string) error {
 	return nil
 }
 
-func printResults(results []bson.M) error {
+func printElasticache(results []bson.M) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, ' ', 0)
 
-	header := []string{
-		"Service",
-		"Region",
-		"OS/Engine",
-		"InstanceType",
-		"vCPU",
-		"Memory",
-		"OnDemandPrice(USD/hour)",
-	}
-
-	if _, err := fmt.Fprintln(w, strings.Join(header, "\t")); err != nil {
+	if _, err := fmt.Fprintln(w, strings.Join(getElasticacheHeader(), "\t")); err != nil {
 		return fmt.Errorf("Failed to print header: %w", err)
 	}
 
 	for _, result := range results {
-		if _, err := fmt.Fprintln(w, format(result)); err != nil {
+		if _, err := fmt.Fprintln(w, formatElasticache(result)); err != nil {
 			return fmt.Errorf("Failed to print result: %w", err)
 		}
 	}
@@ -90,7 +79,20 @@ func printResults(results []bson.M) error {
 	return nil
 }
 
-func format(result primitive.M) string {
+func getElasticacheHeader() []string {
+	return []string{
+		"Service",
+		"Region",
+		"OS/Engine",
+		"InstanceType",
+		"vCPU",
+		"Memory",
+		"OnDemandPrice(USD/hour)",
+		"OnDemandPrice(USD/month)",
+	}
+}
+
+func formatElasticache(result primitive.M) string {
 	fields := []string{
 		result["servicecode"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["regioncode"].(string),
@@ -99,6 +101,7 @@ func format(result primitive.M) string {
 		result["product"].(bson.M)["attributes"].(bson.M)["vcpu"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["memory"].(string),
 		result["ondemandpriceperusd"].(string),
+		utils.ConvertHourlyToMonthly(result["ondemandpriceperusd"].(string)),
 	}
 
 	return strings.Join(fields, "\t")
