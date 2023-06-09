@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/sfuruya0612/apf/internal/mongo"
 	"github.com/sfuruya0612/apf/internal/utils"
 	"github.com/urfave/cli/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -31,32 +30,30 @@ var rdsCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return getRdsPrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("vcpu"), ctx.String("memory"), ctx.String("engine"), ctx.String("deployment-option"))
+		return getRdsPrice(ctx)
 	},
 }
 
-func getRdsPrice(mongoUri, instanceType, vcpu, memory, engine, deploymentOption string) error {
-	conn, err := mongo.Connect(mongoUri)
-	if err != nil {
-		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
+func getRdsPrice(ctx *cli.Context) error {
+	filter := bson.M{
+		"product.attributes.osengine":         ctx.String("engine"),
+		"product.attributes.deploymentoption": ctx.String("deployment-option"),
 	}
 
-	coll := mongo.Collection(conn, "rds")
-
-	filter := bson.M{"product.attributes.osengine": engine, "product.attributes.deploymentoption": deploymentOption}
-
-	filter = appendCondition(filter, instanceType, vcpu, memory)
-
-	results, err := mongo.Find(coll, filter, nil)
+	results, err := findMongo(
+		ctx.String("mongo-uri"),
+		"rds",
+		ctx.String("instance-type"),
+		ctx.String("vcpu"),
+		ctx.String("memory"),
+		filter,
+	)
 	if err != nil {
 		return fmt.Errorf("Failed to find: %w", err)
 	}
 
 	printRds(results)
 
-	if err := mongo.Disconnect(conn); err != nil {
-		return fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
-	}
 	return nil
 }
 

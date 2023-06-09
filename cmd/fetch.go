@@ -58,16 +58,16 @@ func fetch(profile, region, mongoUri string) error {
 	wg.Add(len(serviceCodes))
 	sem := make(chan struct{}, 10)
 
-	for _, serviceCode := range serviceCodes {
-		go func(serviceCode string) {
+	for _, sc := range serviceCodes {
+		go func(sc string) {
 			defer wg.Done()
 
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			products, err := aws.GetProducts(cfg, serviceCode)
+			products, err := aws.GetProducts(cfg, sc)
 			if err != nil {
-				errCh <- fmt.Errorf("Failed to fetch %s products: %w", serviceCode, err)
+				errCh <- fmt.Errorf("Failed to fetch %s products: %w", sc, err)
 				return
 			}
 
@@ -77,20 +77,22 @@ func fetch(profile, region, mongoUri string) error {
 				return
 			}
 
-			coll := mongo.Collection(conn, getCollectionName(serviceCode))
+			coll := mongo.Collection(conn, getCollectionName(sc))
+
+			log.Printf("Drop %s collection\n", sc)
 
 			if err := mongo.DropCollection(coll, nil); err != nil {
-				errCh <- fmt.Errorf("Failed to remove %s collection: %w", serviceCode, err)
+				errCh <- fmt.Errorf("Failed to remove %s collection: %w", sc, err)
 				return
 			}
 
-			log.Printf("Inserting %d %s products into MongoDB\n", len(products), serviceCode)
+			log.Printf("Inserting %d %s products into MongoDB\n", len(products), sc)
 
 			// TODO: Bulk insert
 			var insertErr error
 			for _, product := range products {
 				if _, err := coll.InsertOne(ctx, product); err != nil {
-					insertErr = fmt.Errorf("Failed to insert %s product %s: %w", serviceCode, *product, err)
+					insertErr = fmt.Errorf("Failed to insert %s product %s: %w", sc, *product, err)
 					break
 				}
 			}
@@ -105,8 +107,8 @@ func fetch(profile, region, mongoUri string) error {
 				return
 			}
 
-			log.Printf("Inserted %d %s products\n", len(products), serviceCode)
-		}(serviceCode)
+			log.Printf("Inserted %d %s products\n", len(products), sc)
+		}(sc)
 	}
 
 	wg.Wait()

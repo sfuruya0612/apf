@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/sfuruya0612/apf/internal/mongo"
 	"github.com/sfuruya0612/apf/internal/utils"
 	"github.com/urfave/cli/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -43,32 +42,32 @@ var ec2Command = &cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return getEc2Price(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("vcpu"), ctx.String("memory"), ctx.String("os"), ctx.String("tenancy"), ctx.String("capacitystatus"), ctx.String("preinstalled-sw"))
+		return getEc2Price(ctx)
 	},
 }
 
-func getEc2Price(mongoUri, instanceType, vcpu, memory, os, tenancy, capacitystatus, preInstalledSw string) error {
-	conn, err := mongo.Connect(mongoUri)
-	if err != nil {
-		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
+func getEc2Price(ctx *cli.Context) error {
+	filter := bson.M{
+		"product.attributes.osengine":       ctx.String("os"),
+		"product.attributes.tenancy":        ctx.String("tenancy"),
+		"product.attributes.capacitystatus": ctx.String("capacitystatus"),
+		"product.attributes.preinstalledsw": ctx.String("preinstalled-sw"),
 	}
 
-	coll := mongo.Collection(conn, "ec2")
-
-	filter := bson.M{"product.attributes.osengine": os, "product.attributes.tenancy": tenancy, "product.attributes.capacitystatus": capacitystatus, "product.attributes.preinstalledsw": preInstalledSw}
-
-	filter = appendCondition(filter, instanceType, vcpu, memory)
-
-	results, err := mongo.Find(coll, filter, nil)
+	results, err := findMongo(
+		ctx.String("mongo-uri"),
+		"ec2",
+		ctx.String("instance-type"),
+		ctx.String("vcpu"),
+		ctx.String("memory"),
+		filter,
+	)
 	if err != nil {
 		return fmt.Errorf("Failed to find: %w", err)
 	}
 
 	printEc2(results)
 
-	if err := mongo.Disconnect(conn); err != nil {
-		return fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
-	}
 	return nil
 }
 

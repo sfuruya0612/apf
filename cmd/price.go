@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+
+	"github.com/sfuruya0612/apf/internal/mongo"
 	"github.com/urfave/cli/v2"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -33,6 +36,32 @@ var servicesCommand = []*cli.Command{
 	ec2Command,
 	rdsCommand,
 	elasticacheCommand,
+}
+
+func findMongo(mongoUri, collection, instanceType, vcpu, memory string, filter bson.M) ([]bson.M, error) {
+	conn, err := mongo.Connect(mongoUri)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to connect to MongoDB: %w", err)
+	}
+
+	coll := mongo.Collection(conn, collection)
+
+	f := appendCondition(filter, instanceType, vcpu, memory)
+
+	results, err := mongo.Find(coll, f, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find: %w", err)
+	}
+
+	if err := mongo.Disconnect(conn); err != nil {
+		return nil, fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil, fmt.Errorf("No results")
+	}
+
+	return results, nil
 }
 
 func appendCondition(filter bson.M, instanceType, vcpu, memory string) bson.M {

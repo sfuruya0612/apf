@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/sfuruya0612/apf/internal/mongo"
 	"github.com/sfuruya0612/apf/internal/utils"
 	"github.com/urfave/cli/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -26,32 +25,27 @@ var elasticacheCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		return getElasticachePrice(ctx.String("mongo-uri"), ctx.String("instance-type"), ctx.String("vcpu"), ctx.String("memory"), ctx.String("engine"))
+		return getElasticachePrice(ctx)
 	},
 }
 
-func getElasticachePrice(mongoUri, instanceType, vcpu, memory, engine string) error {
-	conn, err := mongo.Connect(mongoUri)
-	if err != nil {
-		return fmt.Errorf("Failed to connect to MongoDB: %w", err)
-	}
+func getElasticachePrice(ctx *cli.Context) error {
+	filter := bson.M{"product.attributes.osengine": ctx.String("engine")}
 
-	coll := mongo.Collection(conn, "elasticache")
-
-	filter := bson.M{"product.attributes.osengine": engine}
-
-	filter = appendCondition(filter, instanceType, vcpu, memory)
-
-	results, err := mongo.Find(coll, filter, nil)
+	results, err := findMongo(
+		ctx.String("mongo-uri"),
+		"elasticache",
+		ctx.String("instance-type"),
+		ctx.String("vcpu"),
+		ctx.String("memory"),
+		filter,
+	)
 	if err != nil {
 		return fmt.Errorf("Failed to find: %w", err)
 	}
 
 	printElasticache(results)
 
-	if err := mongo.Disconnect(conn); err != nil {
-		return fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
-	}
 	return nil
 }
 
