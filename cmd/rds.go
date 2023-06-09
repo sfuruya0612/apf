@@ -89,6 +89,7 @@ func getRdsHeader() []string {
 		"vCPU",
 		"Memory",
 		"DeploymentOption",
+		"Storage",
 		"OnDemandPrice(USD/hour)",
 		"OnDemandPrice(USD/month)",
 	}
@@ -103,6 +104,7 @@ func formatRds(result primitive.M) string {
 		result["product"].(bson.M)["attributes"].(bson.M)["vcpu"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["memory"].(string),
 		result["product"].(bson.M)["attributes"].(bson.M)["deploymentoption"].(string),
+		result["product"].(bson.M)["attributes"].(bson.M)["storage"].(string),
 		result["ondemandpriceperusd"].(string),
 		utils.ConvertHourlyToMonthly(result["ondemandpriceperusd"].(string)),
 	}

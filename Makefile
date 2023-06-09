@@ -1,5 +1,5 @@
 CONTAINER_NAME = mongodb
-MONGODB_VERSION = 6.0.5
+MONGODB_VERSION = 6.0.6
 MONGODB_PORT = 27017
 
 COMMIT_HASH := $(shell git rev-parse --short HEAD)
@@ -30,7 +30,7 @@ logs:
 	docker logs $(CONTAINER_NAME)
 
 exec:
-	docker exec -it $(CONTAINER_NAME) mongo
+	docker exec -it $(CONTAINER_NAME) mongosh
 
 fmt:
 	go fmt ./...

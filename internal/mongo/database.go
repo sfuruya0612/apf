@@ -2,7 +2,6 @@ package mongo
 
 import (
 	"context"
-	"log"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -35,8 +34,6 @@ func DropCollection(coll *mongo.Collection, ctx context.Context) error {
 	if err := coll.Drop(ctx); err != nil {
 		return err
 	}
-
-	log.Printf("Dropped %s collection\n", coll.Name())
 
 	return nil
 }
