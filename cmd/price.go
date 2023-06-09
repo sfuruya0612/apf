@@ -57,6 +57,7 @@ func findMongo(mongoUri, collection, instanceType, vcpu, memory string, filter b
 		return nil, fmt.Errorf("Failed to disconnect to MongoDB: %w", err)
 	}
 
+	// I'm not sure about returning it with an error
 	if len(results) == 0 {
 		return nil, fmt.Errorf("No results")
 	}
